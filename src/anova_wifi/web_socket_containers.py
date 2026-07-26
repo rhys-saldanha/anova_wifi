@@ -457,6 +457,34 @@ def build_set_timer_payload(
     return {"cookerId": cooker_id, "type": cooker_type, "timer": cook_time_seconds}
 
 
+class Capability(str, Enum):
+    """A command that a device may or may not support."""
+
+    SET_TARGET_TEMPERATURE = "set_target_temperature"
+    START_COOK = "start_cook"
+    STOP_COOK = "stop_cook"
+    SET_TIMER = "set_timer"
+
+
+# Precision Cooker (APC) device type identifiers, per
+# developer.anovaculinary.com/docs/devices/wifi/authentication. All of them
+# share the same command schema (see build_start_cook_payload et al.), so
+# they all support the same set of commands.
+_APC_TYPES = frozenset({"a3", "a4", "a5", "a6", "a7", "a8", "pro"})
+_APC_CAPABILITIES = frozenset(Capability)
+
+
+def get_supported_capabilities(device_type: str) -> frozenset[Capability]:
+    """Return the commands supported by a device of the given type.
+
+    Unrecognized types (e.g. a future Precision Oven type) report no
+    capabilities rather than assuming untested command support.
+    """
+    if device_type in _APC_TYPES:
+        return _APC_CAPABILITIES
+    return frozenset()
+
+
 @dataclass
 class APCWifiDevice:
     cooker_id: str
@@ -470,6 +498,11 @@ class APCWifiDevice:
     send_command: (
         Callable[[AnovaCommand, dict[str, Any]], Coroutine[Any, Any, None]] | None
     ) = field(default=None, repr=False, compare=False)
+
+    @property
+    def supported_capabilities(self) -> frozenset[Capability]:
+        """The commands this device supports, based on its type."""
+        return get_supported_capabilities(self.type)
 
     def set_update_listener(self, update_function: Callable[[APCUpdate], None]) -> None:
         self.update_listener = update_function
